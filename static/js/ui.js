@@ -22,9 +22,15 @@ export function tplDevice(d) {
     : d.locked
       ? `<span class="badge bg-warning text-dark">已锁定</span>`
       : `<span class="badge bg-success">已解锁</span>`;
-  const devB = d.devmode == null ? "" : d.devmode
-    ? `<span class="badge bg-success">开发者模式开</span>`
-    : `<span class="badge bg-danger">开发者模式关</span>`;
+  const iosMajor = parseInt(String(d.ios || "").split(".")[0], 10) || 0;
+  const devNA = iosMajor > 0 && iosMajor < 16;
+  const devB = devNA
+    ? `<span class="badge bg-secondary">iOS ${esc(d.ios)} 免开发者模式</span>`
+    : d.devmode == null
+      ? ""
+      : d.devmode
+        ? `<span class="badge bg-success">开发者模式开</span>`
+        : `<span class="badge bg-danger">开发者模式关</span>`;
   const st = window._lastChecks || {};
   const dotCls = s => s === "pass" ? "bg-success" : s === "warn" ? "bg-warning" : "bg-danger";
   return `<div class="d-flex align-items-center gap-3">${PHONE_ON}
@@ -37,7 +43,7 @@ export function tplDevice(d) {
     <div class="row g-2 mt-2 text-center">
       <div class="col-4"><div class="border rounded py-2"><span class="dot ${dotCls(st.device)}"></span><div class="small fw-bold mt-1">连接</div><small class="text-muted">${esc(st.deviceDetail || d.connection || "正常")}</small></div></div>
       <div class="col-4"><div class="border rounded py-2"><span class="dot ${dotCls(st.unlock)}"></span><div class="small fw-bold mt-1">解锁</div><small class="text-muted">${d.locked ? "需解锁" : "已解锁"}</small></div></div>
-      <div class="col-4"><div class="border rounded py-2"><span class="dot ${dotCls(st.devmode)}"></span><div class="small fw-bold mt-1">开发者</div><small class="text-muted">${d.devmode ? "已开启" : "未开启"}</small></div></div>
+      <div class="col-4"><div class="border rounded py-2"><span class="dot ${dotCls(st.devmode)}"></span><div class="small fw-bold mt-1">开发者</div><small class="text-muted">${devNA ? "无需" : d.devmode ? "已开启" : "未开启"}</small></div></div>
     </div>`;
 }
 

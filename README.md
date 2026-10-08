@@ -1,13 +1,17 @@
 # 张雪峰
 
-在 iOS 17+ 真机上模拟跑步 / 定点定位：按设定配速沿路线逐点设置虚拟定位，可无限循环，
+在 iOS 14+ 真机上模拟跑步 / 定点定位：按设定配速沿路线逐点设置虚拟定位，可无限循环，
 带曲线拟合、跑步摆动和配速随机起伏，看起来像真人在跑。另有 WebUI（健康检查 + 表单配置 +
 路线预览 + 一键启动/停止），不用敲命令行。
+
+> 连接方式按系统版本自动切换：**iOS 17+** 走 tun 隧道（需要 root / 管理员）；
+> **iOS 14~16** 免隧道，直接连设备并自动挂载 DeveloperDiskImage，普通用户权限即可。
 
 ## 1. 准备工作
 
 1. 电脑是 macOS 或 Windows（Windows 需安装 iTunes 官方版并打开过一次）。
-2. iPhone / iPad 系统版本 ≥ 17，`设置 → 隐私与安全性 → 开发者模式` 已打开。
+2. iPhone / iPad 系统版本 ≥ 14。**iOS 16 及以上**还需打开
+   `设置 → 隐私与安全性 → 开发者模式`；**iOS 15 及以下没有这个开关，无需开启**。
 3. 电脑安装 Python 3.10+。
 4. 同一时间只能连一台设备。
 5. 设备用数据线直连电脑，解锁，弹出"信任此电脑"时点信任。
@@ -43,6 +47,8 @@ pip install -r requirements.txt
 ```
 
 注意 `qh3==1.9.4` 是钉死的版本（`pymobiledevice3==2.46.1` 与 `qh3 2.x` 不兼容），不要升级。
+`ipsw-parser` 也钉在 `1.3.9`（`>=1.4` 移除了 `ipsw_parser.img4`，会让 iOS 14~16 挂载
+DeveloperDiskImage 直接报错），同样不要升级。
 
 ## 3. 启动（推荐 WebUI）
 
@@ -69,7 +75,24 @@ sudo .venv/bin/python main.py --pin "30.30,120.08"  # 定点（WGS-84）
 sudo .venv/bin/python main.py --pair-only         # 只做预检配对
 ```
 
-必须 root（建 tun 隧道必需），且用虚拟环境里的 python（sudo 下直接 `python3` 会找不到依赖）。
+`iOS 17+` 必须 root（建 tun 隧道必需），且用虚拟环境里的 python（sudo 下直接 `python3` 会找不到依赖）。
+`iOS 14~16` 免隧道，但启动脚本默认仍会提权，照常用 `./start-ui.sh` / `sudo` 即可。
+
+### 老系统（iOS 14~16）的开发者镜像
+
+首次跑老系统会自动挂载 DeveloperDiskImage，顺序是：本机 Xcode 的
+`DeviceSupport/<版本>` → 本地缓存 → 联网下载。下载源依次尝试 GitHub 官方源和国内可达的
+加速镜像（`ghproxy.net` / `gh-proxy.com`），镜像内容由手机端签名校验，走镜像不改变信任根。
+镜像缓存在 `~/.pymobiledevice3/DeveloperDiskImages/<版本>`（不可写时退到项目 `.ddi/<版本>`），
+**同一版本只下一次**。
+
+GitHub 全不通时，任选一种手动方式（三种都支持，`config.yaml` 里写不会被 WebUI 覆盖）：
+
+| 方式 | 做法 |
+| --- | --- |
+| 本地镜像目录 | `config.yaml` 里加 `ddi_dir: /你放镜像的目录`（含 `DeveloperDiskImage.dmg` 和 `.dmg.signature`）；CLI 也可 `export ZXF_DDI_DIR=...` |
+| 自选镜像站 | `config.yaml` 里加 `ddi_mirror: https://你的镜像/`（会拼成 `<镜像>/<仓库>/<分支>/<路径>`）；CLI 也可 `export ZXF_DDI_MIRROR=...` |
+| 走代理 | `export HTTPS_PROXY=http://127.0.0.1:7890`（注意 WebUI 是 `sudo` 起的，需 `sudo -E` 或直接改 config.yaml） |
 
 ## 4. 配置（`config.yaml`）
 
@@ -111,14 +134,17 @@ sudo .venv/bin/python main.py --pair-only         # 只做预检配对
 ## 7. 常见问题
 
 - 一直提示没设备：确认线是数据线、设备已解锁并点了信任，一次只连一台。
-- 提示没开开发者模式：去手机设置里打开，重启手机后再跑。
+- 提示没开开发者模式：仅 iOS 16 及以上有此要求，去手机设置里打开，重启手机后再跑；
+  iOS 15 及以下没有这个设置，程序会自动跳过。
+- iOS 14~16 报"挂载开发者镜像失败/下载失败"：先保持联网重试（官方源不通会自动走国内镜像）；
+  还不行就按第 3 节"老系统（iOS 14~16）的开发者镜像"手动放镜像或指定镜像站。
 - 跑起来像"飞"：路线里混进了很远的点，删掉它，或用一键均匀化。
 - macOS 反复要密码：`start-ui.sh` 只在启动时验证一次，后续不再打扰。
 
 ## 8. 项目结构
 
 ```
-main.py            命令行入口（预检 → 路线 → 隧道 → 跑步/定点）
+main.py            命令行入口（预检 → 路线 → 连接[17+: 隧道 / 14~16: 免隧道+挂镜像] → 跑步/定点）
 run.py             跑步逻辑（配速 / 拟合 / 摆动 / BD-09→WGS-84）
 webui.py           WebUI 后端（标准库 http.server，只绑定 127.0.0.1）
 templates/         页面模板    static/  前端资源（Bootstrap/Leaflet 已离线打包）

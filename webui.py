@@ -425,11 +425,16 @@ def query_device():
         except Exception:
             pass
         try:
-            ok, dev_or_err = _call_with_timeout(lambda: bool(ld.developer_mode_status),
-                                                timeout=8)
-            info["devmode"] = bool(dev_or_err) if ok else None
-        except Exception:
-            info["devmode"] = None
+            major = int(str(vals.get("ProductVersion") or "").split(".")[0])
+        except ValueError:
+            major = 0
+        if major >= 16:
+            try:
+                ok, dev_or_err = _call_with_timeout(lambda: bool(ld.developer_mode_status),
+                                                    timeout=8)
+                info["devmode"] = bool(dev_or_err) if ok else None
+            except Exception:
+                info["devmode"] = None
         try:
             ld.close()
         except Exception:
@@ -497,29 +502,33 @@ def check_lockdown():
             "hint": "手机上点\"信任此电脑\"并输密码, 然后再启动. "
                     "没弹框就重插线等几秒."}
     out["ios"] = {
-        "id": "ios", "name": "iOS 版本", "status": "pass" if major >= 17 else "fail",
+        "id": "ios", "name": "iOS 版本", "status": "pass" if major >= 14 else "fail",
         "detail": f"iOS {ver}",
-        "hint": "" if major >= 17 else "仅支持 iOS 17 及以上"}
+        "hint": "" if major >= 14 else "仅支持 iOS 14 及以上"}
     locked = bool(vals.get("PasswordProtected"))
     out["unlock"] = {
         "id": "unlock", "name": "设备解锁", "status": "fail" if locked else "pass",
         "detail": "已锁, 需解锁" if locked else "已解锁",
         "hint": "解锁设备 (输密码进主屏) 后重试" if locked else ""}
-    ok2, dev_or_err = _call_with_timeout(lambda: bool(ld.developer_mode_status),
-                                         timeout=8)
-    if not ok2:
-        import concurrent.futures as _cf2
-        e = dev_or_err
-        if isinstance(e, _cf2.TimeoutError):
-            dev, dev_detail = False, "查询超时"
-            dev_hint = "手机解锁亮屏后点刷新重试"
+    if major >= 16:
+        ok2, dev_or_err = _call_with_timeout(lambda: bool(ld.developer_mode_status),
+                                             timeout=8)
+        if not ok2:
+            import concurrent.futures as _cf2
+            e = dev_or_err
+            if isinstance(e, _cf2.TimeoutError):
+                dev, dev_detail = False, "查询超时"
+                dev_hint = "手机解锁亮屏后点刷新重试"
+            else:
+                dev, dev_detail = False, f"查询失败: {e}"
+                dev_hint = "解锁后重试, 或用 idevicedevmodectl enable"
         else:
-            dev, dev_detail = False, f"查询失败: {e}"
-            dev_hint = "解锁后重试, 或用 idevicedevmodectl enable"
+            dev = bool(dev_or_err)
+            dev_detail = "已开启" if dev else "未开启"
+            dev_hint = "" if dev else "手机 设置-隐私与安全性-开发者模式 打开, 重启手机, 或用 idevicedevmodectl enable"
     else:
-        dev = bool(dev_or_err)
-        dev_detail = "已开启" if dev else "未开启"
-        dev_hint = "" if dev else "手机 设置-隐私与安全性-开发者模式 打开, 重启手机, 或用 idevicedevmodectl enable"
+        dev, dev_detail = True, "无需 (iOS <16)"
+        dev_hint = ""
     out["devmode"] = {
         "id": "devmode", "name": "开发者模式", "status": "pass" if dev else "fail",
         "detail": dev_detail, "hint": dev_hint}

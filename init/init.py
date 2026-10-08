@@ -43,17 +43,21 @@ def preflight(pair_timeout=60):
     except connect.ConnectError as e:
         raise InitError(str(e), getattr(e, "hint", "")) from e
     print(f"  系统版本 {ver}", flush=True)
-    try:
-        connect.check_developer_mode(lockdown)
-    except connect.DeveloperModeError as e:
+    major = int(str(ver).split(".")[0]) if str(ver).split(".")[0].isdigit() else 0
+    if major >= 16:
         try:
-            connect.reveal_developer_mode(lockdown)
-        except Exception:
-            pass
-        raise InitError(str(e), getattr(e, "hint", "")) from e
-    except connect.ConnectError as e:
-        raise InitError(str(e), getattr(e, "hint", "")) from e
-    print("  开发者模式已开", flush=True)
+            connect.check_developer_mode(lockdown)
+        except connect.DeveloperModeError as e:
+            try:
+                connect.reveal_developer_mode(lockdown)
+            except Exception:
+                pass
+            raise InitError(str(e), getattr(e, "hint", "")) from e
+        except connect.ConnectError as e:
+            raise InitError(str(e), getattr(e, "hint", "")) from e
+        print("  开发者模式已开", flush=True)
+    else:
+        print("  开发者模式: 无需 (iOS <16)", flush=True)
     return {"lockdown": lockdown, "version": ver}
 
 
